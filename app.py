@@ -1,6 +1,7 @@
 import streamlit as st
 import yfinance as yf
 import pandas as pd
+import numpy as np
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 from transformers import pipeline
@@ -131,21 +132,28 @@ if st.session_state.search_triggered:
             if not data:
                 st.error(f"❌ Тикер '{ticker_input}' не найден. Проверьте правильность.")
             else:
-                # Анализ новостей
                 news_list = stock.news
                 scores = []
-                # Пытаемся достать заголовки из разных форматов ответа API
                 titles_found = []
-                for n in news_list:
-                    title = n.get('title') or (
-                        n.get('content', {}).get('title') if isinstance(n.get('content'), dict) else None)
-                    if title:
-                        titles_found.append(title)
-                        try:
-                            res = sentiment_pipe(title)[0]
-                            scores.append(1 if res['label'] == 'positive' else -1 if res['label'] == 'negative' else 0)
-                        except:
-                            continue
+                seen_titles = set()
+
+                if news_list:
+                    for n in news_list:
+                        if len(titles_found) >= 20:
+                            break
+
+                        title = n.get('title') or (
+                            n.get('content', {}).get('title') if isinstance(n.get('content'), dict) else None)
+
+                        if title and title not in seen_titles:
+                            seen_titles.add(title)
+                            titles_found.append(title)
+                            try:
+                                res = sentiment_pipe(title)[0]
+                                scores.append(
+                                    1 if res['label'] == 'positive' else -1 if res['label'] == 'negative' else 0)
+                            except:
+                                continue
 
                 if not scores:
                     sent_val, sent_text = 0, "No News Data"
@@ -183,12 +191,11 @@ if st.session_state.search_triggered:
                     f"<div style='background-color:{color}20; border:2px solid {color}; padding:20px; border-radius:10px; text-align:center;'><h1 style='color:{color};'>{v}</h1><p>{reason}</p></div>",
                     unsafe_allow_html=True)
 
-                # Вывод новостей
-                with st.expander("Show AI News Analysis Details"):
+                with st.expander(f"Show AI News Analysis Details (Analyzed {len(titles_found)} news)"):
                     if not titles_found:
-                        st.info("Yahoo Finance не вернул новости. Попробуйте другой тикер.")
+                        st.info("Yahoo Finance не повернув новини. Спробуйте інший тикер.")
                     else:
-                        for t in titles_found[:5]:
+                        for t in titles_found:
                             st.write(f"📰 {t}")
 
                 st.divider()
