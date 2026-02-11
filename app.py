@@ -33,7 +33,6 @@ sentiment_pipe = load_sentiment_model()
 # --- 2. ФУНКЦИИ ЛОГИКИ ---
 
 def validate_ticker(ticker):
-    """Проверка ввода пользователя"""
     if not ticker:
         return False, "Поле тикера не может быть пустым."
     if not re.match(r'^[A-Z]+$', ticker):
@@ -86,18 +85,39 @@ def get_data(ticker):
         return None, None, None
 
 
-def get_report(data, sentiment, hist):
+def get_report(data):
     output = io.BytesIO()
     with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
         summary = pd.DataFrame({
-            "Metric": ["Ticker", "Price", "DCF Fair Value", "RSI (Psychology)", "Sentiment Status"],
-            "Value": [data['Ticker'], data['Price'], f"{data['DCF']:.2f}" if data['DCF'] else "N/A",
-                      f"{data['RSI']:.2f}", sentiment]
+            "Metric": ["Ticker", "Current Price", "DCF Fair Value"],
+            "Value": [
+                data['Ticker'],
+                f"${data['Price']}",
+                f"${data['DCF']:.2f}" if data['DCF'] else "N/A"
+            ]
         })
-        summary.to_excel(writer, sheet_name='Summary', index=False)
-        hist_exp = hist.copy()
-        hist_exp.index = hist_exp.index.tz_localize(None).strftime('%Y-%m-%d')
-        hist_exp.to_excel(writer, sheet_name='MarketData')
+
+        sheet_name = 'Summary'
+        summary.to_excel(writer, sheet_name=sheet_name, index=False)
+
+        workbook = writer.book
+        worksheet = writer.sheets[sheet_name]
+
+        header_fmt = workbook.add_format({
+            'bold': True,
+            'align': 'center',
+            'valign': 'vcenter',
+            'bg_color': '#D3D3D3',
+            'border': 1
+        })
+
+        cell_fmt = workbook.add_format({'align': 'center', 'valign': 'vcenter'})
+
+        for col_num, value in enumerate(summary.columns.values):
+            worksheet.write(0, col_num, value, header_fmt)
+
+        worksheet.set_column('A:B', 30, cell_fmt)
+
     return output.getvalue()
 
 
@@ -191,13 +211,6 @@ if st.session_state.search_triggered:
                     f"<div style='background-color:{color}20; border:2px solid {color}; padding:20px; border-radius:10px; text-align:center;'><h1 style='color:{color};'>{v}</h1><p>{reason}</p></div>",
                     unsafe_allow_html=True)
 
-                with st.expander(f"Show AI News Analysis Details (Analyzed {len(titles_found)} news)"):
-                    if not titles_found:
-                        st.info("Yahoo Finance не повернув новини. Спробуйте інший тикер.")
-                    else:
-                        for t in titles_found:
-                            st.write(f"📰 {t}")
-
                 st.divider()
-                st.download_button("📥 DOWNLOAD REPORT (.xlsx)", get_report(data, sent_text, hist),
+                st.download_button("📥 DOWNLOAD REPORT (.xlsx)", get_report(data),
                                    f"{ticker_input}_Report.xlsx")
