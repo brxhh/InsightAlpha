@@ -6,3 +6,4 @@ plotly
 transformers
 torch
 xlsxwriter
+sec-api==1.0.32
